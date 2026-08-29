@@ -1,0 +1,17 @@
+asset_id	product_id	asset_type	drive_file_name	drive_file_id	drive_resource_key	repository_path	mime_type	download_name	reader_enabled	download_enabled	active	max_downloads	file_version	file_size	checksum	updated_at
+asset_cover_01	prod_sun_also_rises_annotated_ebook	cover	TheSunAlsoRisesAnnotatedEbook	1RkpV03OIaBU4aOTe4LW0aBmnn06HRGt9			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_ebook_01	prod_sun_also_rises_annotated_ebook	epub	TheSunAlsoRisesAnnotated				application/epub+zip	The-Sun-Also-Rises-Annotated.epub	TRUE	TRUE	TRUE	20	1			2026-06-06
+asset_cover_02	prod_sun_also_rises_annotated_paperback	cover	TheSunAlsoRisesAnnotatedPaperback	1R0r5JQ3en_n0Vy9Kqaat_Hp6dlAb378m			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_cover_03	prod_sun_also_rises_20c_ebook	cover	TheSunAlsoRises20thCenturyClassic	17e4tpG2pUBldqMA8sc-9Snxcre1957lZ			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_ebook_03	prod_sun_also_rises_20c_ebook	epub	TheSunAlsoRises20thCenturyClassic				application/epub+zip	The-Sun-Also-Rises-A-20th-Century-Classic.epub	TRUE	TRUE	TRUE	20	1			2026-06-06
+asset_cover_04	prod_great_gatsby_annotated_ebook	cover	TheGreatGatsbyAnnotated	1rI7uezZPLheoT1p6cFdSBaJVvb8ZehhZ			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_ebook_04	prod_great_gatsby_annotated_ebook	epub	TheGreatGatsbyAnnotated				application/epub+zip	The-Great-Gatsby-Annotated.epub	TRUE	TRUE	TRUE	20	1			2026-06-06
+asset_cover_05	prod_42_ocean_blue_ebook	cover	42AndTheOceanBlue	1jAEueIppa_mofZhpuhVEP_Lt3UMZxdPH			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_ebook_05	prod_42_ocean_blue_ebook	epub	42AndTheOceanBlue				application/epub+zip	42-and-The-Ocean-Blue.epub	TRUE	TRUE	TRUE	20	1			2026-06-06
+asset_cover_06	prod_all_quiet_western_front_ebook	cover	AllQuietOnTheWesternFront	1wZE-1Vx1IKNEuE9aXjW6uyDrUNWmnGpx			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_ebook_06	prod_all_quiet_western_front_ebook	epub	AllQuietOnTheWesternFront				application/epub+zip	All-Quiet-on-the-Western-Front.epub	TRUE	TRUE	TRUE	20	1			2026-06-06
+asset_cover_07	prod_farewell_to_arms_20c_ebook	cover	AFarewellToArms20thCenturyClassic	1i_x2xNXK08wK0xKsGz83C4ZL1aPwyq62			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_ebook_07	prod_farewell_to_arms_20c_ebook	epub	AFarewellToArms20thCenturyClassic				application/epub+zip	A-Farewell-to-Arms-A-20th-Century-Classic.epub	TRUE	TRUE	TRUE	20	1			2026-06-06
+asset_cover_08	prod_once_upon_a_dream_ebook	cover	OnceUponADream	1JtjJUJr2pPs203hRZDF59Eb0dPgFckFr			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06
+asset_ebook_08	prod_once_upon_a_dream_ebook	epub	OnceUponADream				application/epub+zip	Once-Upon-a-Dream-Alexander-Valois.epub	TRUE	TRUE	TRUE	20	1			2026-06-06
+asset_cover_09	prod_once_upon_a_dream_paperback	cover	OnceUponADream	1JtjJUJr2pPs203hRZDF59Eb0dPgFckFr			image/*		FALSE	FALSE	TRUE	0	1			2026-06-06

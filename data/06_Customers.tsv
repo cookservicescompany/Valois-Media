@@ -1,0 +1,1 @@
+customer_id	email	display_name	status	email_verified	created_at	updated_at	last_login_at	password_hash	password_salt	password_iterations	verification_token_hash	verification_expires_at	reset_token_hash	reset_expires_at	failed_login_count	locked_until	session_version	preferences_json

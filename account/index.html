@@ -1,0 +1,73 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/assets/favicon.ico">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="/assets/css/site.css">
+<script defer src="/assets/js/config.js"></script>
+<script defer src="/assets/js/api.js"></script>
+<script defer src="/assets/js/data.js"></script>
+<script defer src="/assets/js/paypal.js"></script>
+<script defer src="/assets/js/site.js"></script>
+<title>Account | Valois Media</title>
+<script defer src="/assets/js/forms.js"></script>
+<script defer src="/assets/js/auth.js"></script>
+<script defer src="/assets/js/account.js"></script></head>
+<body data-page="account"><main id="main">
+<section class="section">
+  <div class="container" id="account-portal">
+    <div data-account-status class="notice" hidden></div>
+
+    <div class="hero-grid" data-account-signed-out>
+      <div>
+        <p class="eyebrow">Customer account</p>
+        <h1>Sign in</h1>
+        <p class="lede">Access your purchases, digital library, downloads, and VMH Lumière reading progress.</p>
+        <form class="form-grid" data-auth-form="login">
+          <label>Email
+            <input type="email" name="email" autocomplete="email" required>
+          </label>
+          <label>Password
+            <input type="password" name="password" autocomplete="current-password" required>
+          </label>
+          <button type="submit">Sign In</button>
+          <div class="form-message"></div>
+        </form>
+        <p><a href="/account/forgot-password/">Forgot your password?</a></p>
+      </div>
+
+      <div class="account-intro">
+        <h2>New to Valois Media?</h2>
+        <p>Create an account to claim eligible purchases, open your library, read through VMH Lumière, and manage access to your digital books.</p>
+        <a class="button secondary" href="/account/create/">Create Account</a>
+      </div>
+    </div>
+
+    <section class="account-summary card" data-account-signed-in hidden>
+      <div class="card-body">
+        <p class="eyebrow">Your Valois Media account</p>
+        <h1>Welcome, <span data-account-name></span></h1>
+
+        <dl class="account-details">
+          <div>
+            <dt>Email</dt>
+            <dd data-account-email></dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd><span data-account-verification class="badge"></span></dd>
+          </div>
+          <div>
+            <dt>Library</dt>
+            <dd data-account-library-count></dd>
+          </div>
+        </dl>
+
+        <div class="account-actions">
+          <a class="button" href="/library/">Open Your Library</a>
+          <a class="button secondary" href="/books/">Browse Books</a>
+          <button class="button secondary" type="button" data-sign-out>Sign Out</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section></main></body></html>

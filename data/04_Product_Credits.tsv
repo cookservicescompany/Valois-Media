@@ -1,0 +1,22 @@
+credit_id	product_id	contributor_id	role	display_label	primary_credit	credit_order	active	created_at	updated_at
+credit_sun_annot_ebook_author	prod_sun_also_rises_annotated_ebook	contrib_ernest_hemingway	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_sun_annot_ebook_editor	prod_sun_also_rises_annotated_ebook	contrib_michael_a_cook	editor	Edited by	FALSE	2	TRUE	2026-06-06	2026-06-06
+credit_sun_annot_ebook_illustrator	prod_sun_also_rises_annotated_ebook	contrib_alexander_valois	illustrator	Illustrated by	FALSE	3	TRUE	2026-06-06	2026-06-06
+credit_sun_annot_paper_author	prod_sun_also_rises_annotated_paperback	contrib_ernest_hemingway	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_sun_annot_paper_editor	prod_sun_also_rises_annotated_paperback	contrib_michael_a_cook	editor	Edited by	FALSE	2	TRUE	2026-06-06	2026-06-06
+credit_sun_annot_paper_illustrator	prod_sun_also_rises_annotated_paperback	contrib_alexander_valois	illustrator	Illustrated by	FALSE	3	TRUE	2026-06-06	2026-06-06
+credit_sun_20c_author	prod_sun_also_rises_20c_ebook	contrib_ernest_hemingway	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_sun_20c_editor	prod_sun_also_rises_20c_ebook	contrib_michael_a_cook	editor	Edited by	FALSE	2	TRUE	2026-06-06	2026-06-06
+credit_sun_20c_illustrator	prod_sun_also_rises_20c_ebook	contrib_alexander_valois	illustrator	Illustrated by	FALSE	3	TRUE	2026-06-06	2026-06-06
+credit_gatsby_author	prod_great_gatsby_annotated_ebook	contrib_f_scott_fitzgerald	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_gatsby_editor	prod_great_gatsby_annotated_ebook	contrib_michael_a_cook	editor	Edited by	FALSE	2	TRUE	2026-06-06	2026-06-06
+credit_gatsby_illustrator	prod_great_gatsby_annotated_ebook	contrib_alexander_valois	illustrator	Illustrated by	FALSE	3	TRUE	2026-06-06	2026-06-06
+credit_ocean_author	prod_42_ocean_blue_ebook	contrib_michael_a_cook	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_all_quiet_author	prod_all_quiet_western_front_ebook	contrib_erich_maria_remarque	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_all_quiet_editor	prod_all_quiet_western_front_ebook	contrib_michael_a_cook	editor	Edited by	FALSE	2	TRUE	2026-06-06	2026-06-06
+credit_all_quiet_illustrator	prod_all_quiet_western_front_ebook	contrib_alexander_valois	illustrator	Illustrated by	FALSE	3	TRUE	2026-06-06	2026-06-06
+credit_farewell_author	prod_farewell_to_arms_20c_ebook	contrib_ernest_hemingway	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_farewell_editor	prod_farewell_to_arms_20c_ebook	contrib_michael_a_cook	editor	Edited by	FALSE	2	TRUE	2026-06-06	2026-06-06
+credit_farewell_illustrator	prod_farewell_to_arms_20c_ebook	contrib_alexander_valois	illustrator	Illustrated by	FALSE	3	TRUE	2026-06-06	2026-06-06
+credit_dream_ebook_author	prod_once_upon_a_dream_ebook	contrib_alexander_valois	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06
+credit_dream_paper_author	prod_once_upon_a_dream_paperback	contrib_alexander_valois	author	Written by	TRUE	1	TRUE	2026-06-06	2026-06-06

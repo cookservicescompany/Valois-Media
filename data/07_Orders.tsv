@@ -1,0 +1,1 @@
+order_id	paypal_order_id	paypal_capture_id	customer_id	email	product_id	quantity	unit_price	subtotal	tax	total	currency	status	payer_country	payment_source	raw_event_id	created_at	updated_at	metadata_json

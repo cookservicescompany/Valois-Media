@@ -1,0 +1,55 @@
+key	value	public	description	updated_at
+site_name	Valois Media	TRUE	Public publishing brand	2026-06-06
+legal_name	Valois Media Holdings	TRUE	Legal or corporate name	2026-06-06
+publisher_display_name	Valois Media	TRUE	Publisher name displayed on product pages	2026-06-06
+workbook_name	VMH Website	FALSE	Google Sheets workbook name	2026-06-06
+spreadsheet_id	1zxO63LYFzyqRn66UYAekXVGyZkIXYdGbGOlsVqqDKr8	FALSE	VMH Website Google Sheet ID	2026-06-06
+apps_script_project_name	VMH Website	FALSE	Google Apps Script project name	2026-06-06
+site_url	https://www.valoismedia.com	TRUE	Canonical public website URL	2026-06-06
+api_url	https://script.google.com/macros/s/AKfycbx55-lohe06sBVDhjlNsL9lTzTN1GvIrmUcrQZVduu9-5CBTmjzX9vZj6A5pqVm_szr/exec	TRUE	Deployed Apps Script web-app URL	2026-06-06
+drive_folder_id	13NYcriBG-ohPxi8SP_2X4D2S7Nv9_wIC	FALSE	Private Google Drive folder ID for digital assets	2026-06-06
+covers_folder_name	covers	FALSE	Google Drive subfolder containing cover images	2026-06-06
+asset_filename_mode	basename_without_extension	FALSE	Apps Script matches supported files by base name regardless of extension	2026-06-06
+cover_extensions	png,webp,jpg,jpeg,svg	FALSE	Supported cover-image extensions	2026-06-06
+ebook_extensions	epub	FALSE	Supported reader and download eBook extensions	2026-06-06
+site_version	1.0.0-alpha	TRUE	Current website and API version	2026-06-06
+tagline		TRUE	Public Valois Media tagline	2026-06-06
+contact_email	valoismediaholdings@gmail.com	TRUE	Public contact email	2026-06-06
+support_email	valoismediaholdings@gmail.com	TRUE	Customer support email	2026-06-06
+admin_email	valoismediaholdings@gmail.com	FALSE	Administrative notification email	2026-06-06
+reply_to_email	valoismediaholdings@gmail.com	FALSE	Reply-to address for transactional email	2026-06-06
+time_zone	America/Indiana/Indianapolis	FALSE	Workbook and Apps Script time zone	2026-06-06
+default_currency	USD	TRUE	Default storefront currency	2026-06-06
+logo_asset_name	VMHLogo01	TRUE	Extension-friendly main logo base name in assets	2026-06-06
+logo_asset_path	/assets/VMHLogo01	TRUE	Extension-friendly main logo path	2026-06-06
+reader_name	VMH Lumière	TRUE	Public proprietary reader name	2026-06-06
+reader_slug	lumiere	TRUE	URL-safe reader identifier	2026-06-06
+reader_route	/lumiere/	TRUE	Public reader route	2026-06-06
+reader_logo_asset_name	Lumiere01	TRUE	Extension-friendly Lumière logo base name in assets	2026-06-06
+reader_logo_asset_path	/assets/Lumiere01	TRUE	Extension-friendly Lumière logo path	2026-06-06
+favicon_asset_name	favicon	TRUE	Extension-friendly favicon base name in assets	2026-06-06
+favicon_asset_path	/assets/favicon	TRUE	Extension-friendly favicon path	2026-06-06
+accounts_enabled	true	TRUE	Enable customer registration and sign-in	2026-06-06
+reader_enabled	true	TRUE	Enable the VMH Lumière reader	2026-06-06
+secure_downloads_enabled	true	TRUE	Enable entitlement-protected downloads	2026-06-06
+newsletter_enabled	true	TRUE	Enable newsletter forms	2026-06-06
+paypal_enabled	true	TRUE	Enable website-hosted PayPal buttons	2026-06-06
+paypal_button_source	website	FALSE	Hosted button IDs live in website code rather than Google Sheets	2026-06-06
+amazon_links_enabled	true	TRUE	Display Amazon purchase links when supplied	2026-06-06
+barnes_noble_links_enabled	true	TRUE	Display Barnes & Noble purchase links when supplied	2026-06-06
+featured_products_limit	8	TRUE	Maximum featured products on homepage	2026-06-06
+new_releases_limit	12	TRUE	Maximum new releases on homepage	2026-06-06
+session_days	7	FALSE	Customer login-session duration in days	2026-06-06
+verify_hours	24	FALSE	Account verification-link lifetime	2026-06-06
+reset_hours	2	FALSE	Password-reset-link lifetime	2026-06-06
+consent_version	2026-06-06	FALSE	Current communications consent version	2026-06-06
+instagram_url		TRUE	Official Instagram URL	2026-06-06
+facebook_url		TRUE	Official Facebook URL	2026-06-06
+x_url		TRUE	Official X profile URL	2026-06-06
+linkedin_url		TRUE	Official LinkedIn URL	2026-06-06
+youtube_url		TRUE	Official YouTube URL	2026-06-06
+footer_text		TRUE	Editable footer description	2026-06-06
+default_seo_title	Valois Media	TRUE	Default browser and search title	2026-06-06
+default_seo_description		TRUE	Default search-engine description	2026-06-06
+copyright_name	Valois Media Holdings	TRUE	Copyright owner displayed in footer	2026-06-06
+copyright_year	2026	TRUE	Copyright year displayed in footer	2026-06-06

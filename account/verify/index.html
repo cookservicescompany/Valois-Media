@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/assets/favicon.ico">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="/assets/css/site.css">
+<script defer src="/assets/js/config.js"></script>
+<script defer src="/assets/js/api.js"></script>
+<script defer src="/assets/js/data.js"></script>
+<script defer src="/assets/js/paypal.js"></script>
+<script defer src="/assets/js/site.js"></script>
+<title>Verify Email | Valois Media</title></head>
+<body data-page=""><main id="main"><section class="section"><div class="container"><h1>Verify Email</h1><p id="verify-message" class="notice">Verifying your email address…</p></div></section><script>addEventListener("DOMContentLoaded",async()=>{const t=new URLSearchParams(location.search).get("token");const n=document.getElementById("verify-message");try{const r=await VMH_API.post("verify-email",{token:t});if(!r.ok)throw new Error(r.error);n.className="notice success";n.textContent=r.message||"Your email is verified."}catch(e){n.className="notice error";n.textContent=e.message}})</script></main></body></html>

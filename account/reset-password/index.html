@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/assets/favicon.ico">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="/assets/css/site.css">
+<script defer src="/assets/js/config.js"></script>
+<script defer src="/assets/js/api.js"></script>
+<script defer src="/assets/js/data.js"></script>
+<script defer src="/assets/js/paypal.js"></script>
+<script defer src="/assets/js/site.js"></script>
+<title>Reset Password | Valois Media</title><script defer src="/assets/js/forms.js"></script>
+<script defer src="/assets/js/auth.js"></script></head>
+<body data-page=""><main id="main"><section class="section"><div class="container"><h1>Choose a New Password</h1><form class="form-grid" data-auth-form="reset-password"><input type="hidden" name="token" id="reset-token"><label>New Password<input type="password" name="password" minlength="10" required></label><button>Reset Password</button><div class="form-message"></div></form></div></section><script>document.getElementById("reset-token").value=new URLSearchParams(location.search).get("token")||"";</script></main></body></html>
