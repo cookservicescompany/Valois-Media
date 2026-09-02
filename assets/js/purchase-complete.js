@@ -1,66 +1,73 @@
 (() => {
-  const root = document.querySelector("#purchase-complete");
+  'use strict';
+  const root = document.querySelector('#purchase-complete');
   if (!root) return;
+  const PENDING_TX_KEY = 'vmh_pending_reconcile_tx';
+  const params = new URLSearchParams(location.search);
+  const initialTx = String(params.get('tx') || params.get('txn_id') || '').trim();
+  if (initialTx) { try { localStorage.setItem(PENDING_TX_KEY, initialTx); } catch (_) {} }
 
-  const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[character]));
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+  const currentTx = () => {
+    if (initialTx) return initialTx;
+    try { return localStorage.getItem(PENDING_TX_KEY) || ''; } catch (_) { return ''; }
+  };
 
-  const params = new URLSearchParams(window.location.search);
-  const transactionId = params.get("tx") || params.get("txn_id") || "";
-
-  function accountActions() {
+  function renderForm(message = '') {
     const signedIn = Boolean(window.VMH_AUTH?.token);
-    return signedIn
-      ? `<div class="actions"><a class="button" href="/library/">Open Your Library</a><a class="button secondary" href="/account/">View Account</a></div>`
-      : `<div class="actions"><a class="button" href="/account/">Sign In</a><a class="button secondary" href="/account/create/">Create Account</a><a class="button secondary" href="/library/">Your Library</a></div>`;
-  }
-
-  function showMissingTransaction() {
+    const tx = currentTx();
     root.innerHTML = `
-      <p class="eyebrow">Secure digital fulfillment</p>
-      <h1>Transaction information is missing</h1>
-      <div class="notice error">
-        PayPal did not include the transaction ID required for automatic verification. Do not purchase the title again.
-      </div>
-      <p>Return from your completed PayPal checkout or contact <a href="mailto:${escapeHtml(window.VMH_CONFIG.contactEmail)}">${escapeHtml(window.VMH_CONFIG.contactEmail)}</a> with your PayPal receipt.</p>
-      ${accountActions()}`;
+      <p class="eyebrow">Valois Media account library</p>
+      <h1>Reconcile Purchase</h1>
+      <p class="lede">Your eBook download is delivered directly through PayPal. Reconciliation is only for attaching that purchase to your account so you can keep it in Your Library and read it online with VMH Lumière.</p>
+      ${message ? `<div class="notice">${escapeHtml(message)}</div>` : ''}
+      <form class="form-grid" data-purchase-reconcile>
+        <label>PayPal transaction ID<input type="text" name="tx" value="${escapeHtml(tx)}" autocomplete="off" required></label>
+        <button type="submit">${signedIn ? 'Attach Purchase to My Account' : 'Sign In to Attach Purchase'}</button>
+        <div class="form-message" data-reconcile-message></div>
+      </form>
+      <div class="actions" style="margin-top:1rem">
+        ${signedIn ? '<a class="button secondary" href="/library/">Open Your Library</a>' : '<a class="button secondary" href="/account/create/">Create Account</a>'}
+        <a class="button secondary" href="/books/">Browse Books</a>
+      </div>`;
+
+    root.querySelector('[data-purchase-reconcile]')?.addEventListener('submit', handleSubmit);
   }
 
-  async function verifyPurchase() {
-    if (!transactionId) {
-      showMissingTransaction();
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const tx = String(new FormData(form).get('tx') || '').trim();
+    if (!tx) return;
+    try { localStorage.setItem(PENDING_TX_KEY, tx); } catch (_) {}
+
+    if (!window.VMH_AUTH?.token) {
+      location.href = `/account/?reconcile=1&tx=${encodeURIComponent(tx)}`;
       return;
     }
 
+    const button = form.querySelector('button[type="submit"]');
+    const message = form.querySelector('[data-reconcile-message]');
+    if (button) button.disabled = true;
+    if (message) { message.className = 'form-message'; message.textContent = 'Verifying the PayPal transaction…'; }
+
     try {
-      const response = await window.VMH_API.post("verify-paypal-return", { tx: transactionId });
-      if (!response.ok) throw new Error(response.error || "The completed payment could not be verified.");
-
+      const response = await VMH_API.post('reconcile-purchase', { token: VMH_AUTH.token, tx });
+      if (!response.ok) throw new Error(response.error || 'The purchase could not be attached.');
+      try { localStorage.removeItem(PENDING_TX_KEY); } catch (_) {}
       const product = response.data?.product || {};
-      const productTitle = product.title ? ` for <strong>${escapeHtml(product.title)}</strong>` : "";
-
+      const readerUrl = response.data?.reader_url || '';
       root.innerHTML = `
-        <p class="eyebrow">Payment confirmed</p>
-        <h1>Your eBook purchase is complete</h1>
-        <div class="notice success">PayPal verified your payment${productTitle}, and your digital entitlement has been recorded.</div>
-        <p class="lede">Sign in or create a Valois Media account using the same email address used for PayPal. Your eBook will appear in Your Library, where you can read it in VMH Lumière or use the protected Download button.</p>
-        ${accountActions()}
-        <p class="meta">PayPal transaction: ${escapeHtml(transactionId)}</p>`;
+        <p class="eyebrow">Purchase attached</p><h1>Your eBook is in Your Library</h1>
+        <div class="notice success">${product.title ? `<strong>${escapeHtml(product.title)}</strong> has been attached to this Valois Media account.` : 'Your verified purchase has been attached to this Valois Media account.'}</div>
+        <p class="lede">You can now keep the title in Your Library, download it from your account, and continue reading online with VMH Lumière.</p>
+        <div class="actions"><a class="button" href="/library/">Open Your Library</a>${readerUrl ? `<a class="button secondary" href="${escapeHtml(readerUrl)}">Read Online in VMH Lumière</a>` : ''}<a class="button secondary" href="/account/">View Account</a></div>
+        <p class="meta">PayPal transaction: ${escapeHtml(tx)}</p>`;
     } catch (error) {
-      root.innerHTML = `
-        <p class="eyebrow">Payment verification</p>
-        <h1>We could not verify the return automatically</h1>
-        <div class="notice error">${escapeHtml(error.message || "Payment verification failed.")}</div>
-        <p>Do not submit another payment. Contact <a href="mailto:${escapeHtml(window.VMH_CONFIG.contactEmail)}">${escapeHtml(window.VMH_CONFIG.contactEmail)}</a> with your PayPal receipt and transaction ID so the purchase can be matched to your account.</p>
-        ${accountActions()}
-        <p class="meta">PayPal transaction: ${escapeHtml(transactionId)}</p>`;
+      if (message) { message.className = 'form-message error'; message.textContent = error.message || 'The purchase could not be attached.'; }
+      if (button) button.disabled = false;
     }
   }
 
-  verifyPurchase();
+  renderForm(initialTx ? 'PayPal returned a transaction ID. Sign in and attach it to this account.' : 'Enter the PayPal transaction ID from your receipt.');
 })();
