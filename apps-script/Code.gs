@@ -1,10 +1,12 @@
 /**
  * VMH Website API
- * Version: 1.0.0 Alpha
- * Date: 2026-06-06
- * UTC build timestamp: 2026-06-06T16:45:00Z
+ * Version: 1.1.0 Alpha
+ * Date: 2026-09-02
+ * UTC build timestamp: 2026-09-02T14:14:48Z
  */
 const VMH = Object.freeze({
+  VERSION: '1.1.0-alpha',
+  BUILD_UTC: '2026-09-02T14:14:48Z',
   SHEET_ID: '1zxO63LYFzyqRn66UYAekXVGyZkIXYdGbGOlsVqqDKr8',
   SITE_URL: 'https://www.valoismedia.com',
   DRIVE_FOLDER_ID: '13NYcriBG-ohPxi8SP_2X4D2S7Nv9_wIC',
@@ -20,6 +22,27 @@ const VMH = Object.freeze({
     ORDERS:'Orders', ENTITLEMENTS:'Entitlements', COMMUNICATIONS:'Communications',
     LOG:'System Log'
   })
+});
+
+/*
+ * Canonical repository-hosted eBook files.
+ * The Google Sheet schema remains unchanged. EPUB reading/download delivery
+ * uses checked-in /assets/products files; Drive remains available for legacy
+ * cover synchronization only.
+ */
+const VMH_REPOSITORY_EPUBS = Object.freeze({
+  'the-sun-also-rises-annotated-ebook': '/assets/products/The_Sun_Also_Rises_Annotated_Illustrated_Edited.epub',
+  'the-sun-also-rises-a-20th-century-classic-ebook': '/assets/products/The_Sun_Also_Rises.epub',
+  'the-great-gatsby-annotated-ebook': '/assets/products/The_Great_Gatsby.epub',
+  '42-and-the-ocean-blue-ebook': '/assets/products/42_and_The_Ocean_Blue.epub',
+  'all-quiet-on-the-western-front-ebook': '/assets/products/All_Quiet_on_the_Western_Front.epub',
+  'a-farewell-to-arms-a-20th-century-classic-ebook': '/assets/products/A_Farewell_to_Arms.epub',
+  'once-upon-a-dream-ebook': '/assets/products/Once Upon a Dream 2nd Edition epub.epub',
+  'war-of-the-worlds-ebook': '/assets/products/The War of the Worlds epub.epub',
+  'wuthering-heights-ebook': '/assets/products/Wuthering Heights epub.epub',
+  'the-wealth-of-nations-ebook': '/assets/products/The Wealth of Nations epub.epub',
+  'siddhartha-ebook': '/assets/products/Siddhartha epub.epub',
+  'great-expectations-ebook': '/assets/products/GreatExpectations epub.epub'
 });
 
 const SCHEMAS = Object.freeze({
@@ -60,7 +83,7 @@ function doPost(e) {
 
 function routeGet_(action, p) {
   switch (action) {
-    case 'ping': return {ok:true,data:{service:'VMH Website API',version:'1.0.0-alpha',timestamp:now_()}};
+    case 'ping': return {ok:true,data:{service:'VMH Website API',version:VMH.VERSION,build_utc:VMH.BUILD_UTC,timestamp:now_()}};
     case 'health': return healthCheck();
     case 'settings':
     case 'public-config': return {ok:true,data:publicSettings_()};
@@ -69,8 +92,6 @@ function routeGet_(action, p) {
     case 'contributors': return {ok:true,data:publicContributors_()};
     case 'contributor': return {ok:true,data:getPublicContributor_(p.slug || p.contributor_id)};
     case 'related-products': return {ok:true,data:relatedProducts_(p.product_id || p.slug)};
-    case 'reader-manifest': return readerManifest_(p);
-    case 'reader-chapter': return readerChapter_(p);
     default: return {ok:false,error:'Unknown action.'};
   }
 }
@@ -87,7 +108,9 @@ function routePost_(action, p) {
     case 'forgot-password': return forgotPassword_(p);
     case 'reset-password': return resetPassword_(p);
     case 'account': return account_(p);
+    case 'reader-manifest': return readerManifest_(p);
     case 'save-reading-progress': return saveReadingProgress_(p);
+    case 'reconcile-purchase': return reconcilePurchase_(p);
     case 'verify-paypal-return': return verifyPayPalPdt_(p);
     default: return {ok:false,error:'Unknown action.'};
   }
@@ -141,8 +164,9 @@ function syncDriveAssetsFromFolder() {
   products.forEach(p=>productMap[p.product_id]=p);
   let matched=0, missing=0;
   rows.forEach(function(row) {
+    if (String(row.asset_type||'').toLowerCase() !== 'cover') return;
     const stem = normalizeStem_(row.drive_file_name || '');
-    const extNeeded = String(row.asset_type||'').toLowerCase()==='epub' ? ['epub'] : ['png','webp','jpg','jpeg','svg'];
+    const extNeeded = ['png','webp','jpg','jpeg','svg'];
     const candidates = files.filter(function(f){
       const parts=fileParts_(f.getName());
       return normalizeStem_(parts.stem)===stem && extNeeded.indexOf(parts.ext)>=0;
@@ -265,6 +289,7 @@ function login_(p) {
   const email=normalizeEmail_(p.email); rateLimit_('login:'+email,15,3600);
   const sh=sheet_(VMH.SHEETS.CUSTOMERS); const c=findBy_(sh,'email',email);
   if(!c || String(c.status).toLowerCase()!=='active') throw new Error('Invalid email or password.');
+  if(!truthy_(c.email_verified)) throw new Error('Verify your email address before signing in.');
   if(c.locked_until && new Date(c.locked_until).getTime()>Date.now()) throw new Error('Account temporarily locked. Try again later.');
   const actual=passwordHash_(p.password,c.password_salt,Number(c.password_iterations||VMH.PASSWORD_ITERATIONS));
   if(!constantTimeEqual_(actual,c.password_hash)){
@@ -304,84 +329,254 @@ function resetPassword_(p) {
   return {ok:true,message:'Password updated.'};
 }
 
+function repositoryPathForProduct_(product) {
+  if (!product) return '';
+  const slug = String(product.slug || '').trim();
+  return VMH_REPOSITORY_EPUBS[slug] || '';
+}
+
+function isAccountEbook_(product) {
+  return Boolean(product) &&
+    String(product.status || '').toLowerCase() === 'active' &&
+    String(product.product_type || '').toLowerCase() === 'ebook';
+}
+
 function account_(p) {
   const c=requireSession_(p.token); const email=normalizeEmail_(c.email);
+  linkEmailEntitlementsToCustomer_(c);
   const products={}; publicProducts_().forEach(x=>products[x.product_id]=x);
   const ents=readObjects_(sheet_(VMH.SHEETS.ENTITLEMENTS)).filter(function(e){
-    return String(e.status).toLowerCase()==='active' && (e.customer_id===c.customer_id||normalizeEmail_(e.email)===email);
+    if(String(e.status).toLowerCase()!=='active')return false;
+    if(e.expires_at){const expires=new Date(e.expires_at).getTime();if(expires&&expires<Date.now())return false;}
+    return e.customer_id===c.customer_id||(!e.customer_id&&normalizeEmail_(e.email)===email);
   });
+
+  const seen={};
   const library=ents.map(function(e){
-    const p=products[e.product_id]; if(!p)return null;
-    const a=findAssetForProduct_(p.product_id,'epub');
+    const product=products[e.product_id]; if(!product||seen[product.product_id])return null;
+    seen[product.product_id]=true;
+    const repositoryPath=repositoryPathForProduct_(product);
     let download='';
-    if(a&&truthy_(p.download_enabled)&&truthy_(a.download_enabled)){
-      download=ScriptApp.getService().getUrl()+'?action=download&token='+encodeURIComponent(createSignedToken_({kind:'download',customer_id:c.customer_id,email:email,product_id:p.product_id,asset_id:a.asset_id,exp:Date.now()+3600000},'DOWNLOAD_TOKEN_SECRET'));
+    let readerUrl='';
+
+    if(repositoryPath&&isAccountEbook_(product)&&truthy_(product.download_enabled)){
+      download=ScriptApp.getService().getUrl()+'?action=download&token='+encodeURIComponent(
+        createSignedToken_({
+          kind:'download',customer_id:c.customer_id,email:email,product_id:product.product_id,
+          exp:Date.now()+3600000
+        },'DOWNLOAD_TOKEN_SECRET')
+      );
     }
-    return Object.assign({},p,{reading_progress:e.reading_progress||'0',reading_location:e.reading_location||'',download_url:download});
+    if(repositoryPath&&isAccountEbook_(product)&&truthy_(product.reader_enabled)){
+      readerUrl=VMH.SITE_URL+'/lumiere/?book='+encodeURIComponent(product.slug);
+    }
+
+    return Object.assign({},product,{
+      reading_progress:e.reading_progress||'0',
+      reading_location:e.reading_location||'',
+      last_read_at:e.last_read_at||'',
+      reader_state_json:e.reader_state_json||'{}',
+      download_url:download,
+      reader_url:readerUrl
+    });
   }).filter(Boolean);
-  return {ok:true,data:{user:{customer_id:c.customer_id,email:c.email,display_name:c.display_name,email_verified:truthy_(c.email_verified)},library:library}};
+
+  return {ok:true,data:{
+    user:{customer_id:c.customer_id,email:c.email,display_name:c.display_name,email_verified:truthy_(c.email_verified)},
+    library:library,
+    reconciliation_url:VMH.SITE_URL+'/purchase-complete/?reconcile=1'
+  }};
 }
 
 function saveReadingProgress_(p) {
   const c=requireSession_(p.token); const product=getPublicProduct_(p.product); if(!product)throw new Error('Book not found.');
+  if(!isAccountEbook_(product)||!truthy_(product.reader_enabled))throw new Error('Reader access is unavailable.');
   const ent=requireEntitlement_(c,product.product_id);
   ent.reading_progress=String(Math.max(0,Math.min(100,Number(p.reading_progress||0))));
-  ent.reading_location=clean_(p.reading_location,500);ent.last_read_at=now_();ent.reader_state_json=clean_(p.reader_state_json||'{}',5000);
+  ent.reading_location=clean_(p.reading_location,1000);
+  ent.last_read_at=now_();
+  ent.reader_state_json=clean_(p.reader_state_json||'{}',5000);
   updateObject_(sheet_(VMH.SHEETS.ENTITLEMENTS),'entitlement_id',ent.entitlement_id,ent);
   return {ok:true,message:'Progress saved.'};
 }
 
 function readerManifest_(p) {
-  const c=requireSession_(p.token); const product=getPublicProduct_(p.product); if(!product||!truthy_(product.reader_enabled))throw new Error('Reader access is unavailable.');
-  const ent=requireEntitlement_(c,product.product_id); const asset=findAssetForProduct_(product.product_id,'epub'); if(!asset)throw new Error('eBook asset is unavailable.');
-  const epub=loadEpub_(asset); return {ok:true,data:{title:product.title,slug:product.slug,spine:epub.spine.map(x=>({id:x.id,href:x.href,title:x.title||''})),reading_location:ent.reading_location||''}};
+  const c=requireSession_(p.token);
+  const product=getPublicProduct_(p.product);
+  if(!product||!isAccountEbook_(product)||!truthy_(product.reader_enabled))throw new Error('Reader access is unavailable.');
+  const ent=requireEntitlement_(c,product.product_id);
+  const repositoryPath=repositoryPathForProduct_(product);
+  if(!repositoryPath)throw new Error('The repository EPUB source is unavailable for this title.');
+
+  return {ok:true,data:{
+    title:product.title,
+    slug:product.slug,
+    product_id:product.product_id,
+    format:'epub',
+    source_url:repositoryPath,
+    reading_progress:ent.reading_progress||'0',
+    reading_location:ent.reading_location||'',
+    last_read_at:ent.last_read_at||'',
+    reader_state_json:ent.reader_state_json||'{}'
+  }};
 }
 
-function readerChapter_(p) {
-  const c=requireSession_(p.token); const product=getPublicProduct_(p.product); if(!product)throw new Error('Book not found.');
-  requireEntitlement_(c,product.product_id); const asset=findAssetForProduct_(product.product_id,'epub'); if(!asset)throw new Error('eBook asset unavailable.');
-  const epub=loadEpub_(asset); const item=epub.spine.find(x=>x.id===p.chapter); if(!item)throw new Error('Chapter unavailable.');
-  const blob=epub.blobs[item.path]; if(!blob)throw new Error('Chapter file unavailable.');
-  return {ok:true,data:{html:sanitizeChapter_(blob.getDataAsString())}};
-}
+function reconcilePurchase_(p) {
+  const c=requireSession_(p.token);
+  const tx=clean_(p.tx||p.txn_id||p.transaction_id,200);
+  if(!tx)throw new Error('Enter a PayPal transaction ID.');
 
-function loadEpub_(asset) {
-  const file=DriveApp.getFileById(asset.drive_file_id); const blobs=Utilities.unzip(file.getBlob()); const map={};blobs.forEach(b=>map[b.getName()]=b);
-  const container=map['META-INF/container.xml']; if(!container)throw new Error('Invalid EPUB container.');
-  const cm=container.getDataAsString().match(/full-path=["']([^"']+)["']/i); if(!cm)throw new Error('EPUB package not found.');
-  const opfPath=cm[1]; const opf=map[opfPath]; if(!opf)throw new Error('EPUB package file unavailable.');
-  const xml=opf.getDataAsString(); const manifest={};
-  (xml.match(/<item\b[^>]*>/gi)||[]).forEach(function(tag){
-    const id=attr_(tag,'id'),href=attr_(tag,'href'),media=attr_(tag,'media-type'); if(id&&href)manifest[id]={id:id,href:href,media:media,path:resolvePath_(opfPath,href)};
+  const verified=verifyPayPalTransaction_(tx);
+  const order=verified.order;
+  const product=verified.product;
+  if(!order||String(order.status||'').toLowerCase()!=='completed')throw new Error('The transaction is not recorded as a completed payment.');
+  if(!product||!isAccountEbook_(product))throw new Error('This purchase is valid, but it is not an account-eligible eBook.');
+
+  const currentCustomerId=String(c.customer_id||'');
+  const attachedCustomerId=String(order.customer_id||'');
+  if(attachedCustomerId&&attachedCustomerId!==currentCustomerId){
+    throw new Error('This PayPal transaction is already attached to a different Valois Media account.');
+  }
+
+  order.customer_id=currentCustomerId;
+  order.updated_at=now_();
+  updateObject_(sheet_(VMH.SHEETS.ORDERS),'order_id',order.order_id,order);
+
+  const entitlementSheet=sheet_(VMH.SHEETS.ENTITLEMENTS);
+  let ent=readObjects_(entitlementSheet).find(function(row){
+    return String(row.product_id||'')===String(product.product_id||'')&&
+      String(row.order_id||'')===String(order.order_id||'')&&
+      String(row.status||'').toLowerCase()==='active';
   });
-  const spine=[];(xml.match(/<itemref\b[^>]*>/gi)||[]).forEach(function(tag){const idref=attr_(tag,'idref');if(manifest[idref])spine.push(manifest[idref]);});
-  return {spine:spine,blobs:map};
-}
-function attr_(tag,name){const m=tag.match(new RegExp(name+'=["\\\']([^"\\\']+)["\\\']','i'));return m?m[1]:'';}
-function resolvePath_(base,rel){const parts=base.split('/');parts.pop();String(rel).split('/').forEach(function(p){if(p==='..')parts.pop();else if(p!=='.')parts.push(p)});return parts.join('/');}
-function sanitizeChapter_(s) {
-  s=String(s||'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<iframe[\s\S]*?<\/iframe>/gi,'').replace(/<form[\s\S]*?<\/form>/gi,'');
-  s=s.replace(/\son\w+\s*=\s*(["']).*?\1/gi,'').replace(/\s(href|src)\s*=\s*(["'])\s*(javascript:|data:text\/html)[\s\S]*?\2/gi,'');
-  const body=s.match(/<body[^>]*>([\s\S]*?)<\/body>/i);return body?body[1]:s;
+
+  if(ent){
+    if(ent.customer_id&&String(ent.customer_id)!==currentCustomerId){
+      throw new Error('This purchase entitlement is already attached to a different Valois Media account.');
+    }
+    ent.customer_id=currentCustomerId;
+    if(!ent.email)ent.email=normalizeEmail_(c.email);
+    ent.notes=clean_((ent.notes?String(ent.notes)+' | ':'')+'Attached through account purchase reconciliation',1000);
+    updateObject_(entitlementSheet,'entitlement_id',ent.entitlement_id,ent);
+  }else{
+    ent=grantEntitlement_({
+      customer_id:currentCustomerId,
+      email:c.email,
+      product_id:product.product_id,
+      order_id:order.order_id,
+      source:'account_reconcile'
+    });
+  }
+
+  log_('INFO','PURCHASE_RECONCILED',c.email,order.order_id,'account',tx,{customer_id:currentCustomerId,product_id:product.product_id});
+  return {ok:true,message:'Purchase attached to your account.',data:{
+    order_id:order.order_id,
+    transaction_id:tx,
+    product:product,
+    entitlement_id:ent.entitlement_id,
+    library_url:VMH.SITE_URL+'/library/',
+    reader_url:truthy_(product.reader_enabled)&&repositoryPathForProduct_(product)
+      ? VMH.SITE_URL+'/lumiere/?book='+encodeURIComponent(product.slug)
+      : ''
+  }};
 }
 
 function verifyPayPalPdt_(p) {
   const tx=clean_(p.tx||p.txn_id,200); if(!tx)throw new Error('Missing PayPal transaction ID.');
-  const identity=PropertiesService.getScriptProperties().getProperty('PAYPAL_PDT_IDENTITY_TOKEN'); if(!identity)throw new Error('PayPal PDT is not configured.');
-  const response=UrlFetchApp.fetch('https://www.paypal.com/cgi-bin/webscr',{method:'post',payload:{cmd:'_notify-synch',tx:tx,at:identity},muteHttpExceptions:true});
-  const parsed=parsePdt_(response.getContentText()); if(!parsed.ok||parsed.data.payment_status!=='Completed')throw new Error('PayPal did not verify a completed payment.');
-  const d=parsed.data; const receiver=normalizeEmail_(PropertiesService.getScriptProperties().getProperty('PAYPAL_RECEIVER_EMAIL')||'');
-  const actual=normalizeEmail_(d.receiver_email||d.business||''); if(receiver&&actual&&receiver!==actual)throw new Error('PayPal receiver mismatch.');
-  const product=getPublicProduct_(d.item_number||d.custom||'')||publicProducts_().find(x=>x.title===d.item_name);
-  if(!product)throw new Error('Verified payment could not be matched to a product. Configure the PayPal item number as the product slug.');
-  if(product.price && Math.abs(Number(product.price)-Number(d.mc_gross||0))>.001)throw new Error('PayPal amount did not match the product.');
-  const email=normalizeEmail_(d.payer_email||'');requireEmail_(email);
-  const existing=findBy_(sheet_(VMH.SHEETS.ORDERS),'paypal_capture_id',tx); if(existing)return {ok:true,message:'Purchase already recorded.'};
+  const result=verifyPayPalTransaction_(tx);
+  return {ok:true,message:result.existing?'Purchase already recorded.':'Purchase verified.',data:{
+    product:result.product,
+    order_id:result.order.order_id,
+    transaction_id:tx
+  }};
+}
+
+function verifyPayPalTransaction_(tx) {
+  const existing=findBy_(sheet_(VMH.SHEETS.ORDERS),'paypal_capture_id',tx);
+  if(existing&&String(existing.status||'').toLowerCase()==='completed'){
+    const existingProduct=getPublicProduct_(existing.product_id);
+    if(!existingProduct)throw new Error('The transaction is recorded, but its product could not be matched.');
+    return {order:existing,product:existingProduct,existing:true};
+  }
+
+  const identity=PropertiesService.getScriptProperties().getProperty('PAYPAL_PDT_IDENTITY_TOKEN');
+  if(!identity)throw new Error('PayPal PDT is not configured.');
+  const response=UrlFetchApp.fetch('https://www.paypal.com/cgi-bin/webscr',{
+    method:'post',payload:{cmd:'_notify-synch',tx:tx,at:identity},muteHttpExceptions:true,followRedirects:false
+  });
+  const parsed=parsePdt_(response.getContentText());
+  if(!parsed.ok||parsed.data.payment_status!=='Completed')throw new Error('PayPal did not verify a completed payment.');
+
+  const d=parsed.data;
+  const receiver=normalizeEmail_(PropertiesService.getScriptProperties().getProperty('PAYPAL_RECEIVER_EMAIL')||'');
+  const actual=normalizeEmail_(d.receiver_email||d.business||'');
+  if(receiver&&actual&&receiver!==actual)throw new Error('PayPal receiver mismatch.');
+
+  const product=matchPayPalProduct_(d);
+  if(!product)throw new Error('Verified payment could not be matched to a Valois Media product.');
+
+  const paidAmount=Number(d.mc_gross||d.payment_gross||0);
+  if(product.price!==''&&product.price!==undefined&&product.price!==null&&
+      isFinite(Number(product.price))&&Math.abs(Number(product.price)-paidAmount)>.001){
+    throw new Error('PayPal amount did not match the product.');
+  }
+  if(d.mc_currency&&product.currency&&String(d.mc_currency).toUpperCase()!==String(product.currency).toUpperCase()){
+    throw new Error('PayPal currency did not match the product.');
+  }
+
+  const email=normalizeEmail_(d.payer_email||''); requireEmail_(email);
   const customer=findBy_(sheet_(VMH.SHEETS.CUSTOMERS),'email',email);
-  const order={order_id:'pdt_'+tx,paypal_order_id:d.parent_txn_id||'',paypal_capture_id:tx,customer_id:customer?customer.customer_id:'',email:email,product_id:product.product_id,quantity:'1',unit_price:d.mc_gross||'',subtotal:d.mc_gross||'',tax:d.tax||'0',total:d.mc_gross||'',currency:d.mc_currency||'USD',status:'completed',payer_country:d.residence_country||'',payment_source:'paypal-pdt',raw_event_id:'pdt:'+tx,created_at:now_(),updated_at:now_(),metadata_json:JSON.stringify({item_name:d.item_name||'',item_number:d.item_number||''})};
+  const order={
+    order_id:'pdt_'+tx,
+    paypal_order_id:d.parent_txn_id||'',
+    paypal_capture_id:tx,
+    customer_id:customer?customer.customer_id:'',
+    email:email,
+    product_id:product.product_id,
+    quantity:'1',
+    unit_price:d.mc_gross||'',
+    subtotal:d.mc_gross||'',
+    tax:d.tax||'0',
+    total:d.mc_gross||'',
+    currency:d.mc_currency||product.currency||'USD',
+    status:'completed',
+    payer_country:d.residence_country||'',
+    payment_source:'paypal-pdt',
+    raw_event_id:'pdt:'+tx,
+    created_at:now_(),
+    updated_at:now_(),
+    metadata_json:JSON.stringify({item_name:d.item_name||'',item_number:d.item_number||'',custom:d.custom||''})
+  };
   appendObject_(sheet_(VMH.SHEETS.ORDERS),order);
   grantEntitlement_({customer_id:order.customer_id,email:email,product_id:product.product_id,order_id:order.order_id,source:'paypal_verified'});
-  return {ok:true,message:'Purchase verified.',data:{product:product}};
+  log_('INFO','PAYPAL_PDT_VERIFIED',email,order.order_id,'paypal',product.product_id,{transaction_id:tx});
+  return {order:order,product:product,existing:false};
+}
+
+function matchPayPalProduct_(data) {
+  const products=publicProducts_();
+  const candidates=[data.item_number,data.custom,data.item_name].filter(Boolean).map(String);
+
+  for(let i=0;i<candidates.length;i++){
+    let candidate=candidates[i];
+    if(candidate.charAt(0)==='{'){
+      try{
+        const parsed=JSON.parse(candidate);
+        candidate=parsed.product_slug||parsed.product_id||parsed.slug||candidate;
+      }catch(_){}
+    }
+    const normalized=normalizeProductKey_(candidate);
+    const match=products.find(function(product){
+      return [product.product_id,product.slug,product.title,product.short_title,product.isbn]
+        .filter(Boolean)
+        .some(function(value){return normalizeProductKey_(value)===normalized;});
+    });
+    if(match)return match;
+  }
+  return null;
+}
+
+function normalizeProductKey_(value) {
+  return String(value||'').toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
 }
 
 function parsePdt_(text) {
@@ -403,20 +598,25 @@ function requireEntitlement_(c,productId) {
   const email=normalizeEmail_(c.email);const e=readObjects_(sheet_(VMH.SHEETS.ENTITLEMENTS)).find(x=>String(x.status).toLowerCase()==='active'&&x.product_id===productId&&(x.customer_id===c.customer_id||normalizeEmail_(x.email)===email));
   if(!e)throw new Error('Your account does not have access to this book.');return e;
 }
-function findAssetForProduct_(productId,type) {return readObjects_(sheet_(VMH.SHEETS.ASSETS)).find(a=>a.product_id===productId&&String(a.asset_type).toLowerCase()===type&&truthy_(a.active)&&a.drive_file_id)||null;}
-
 function downloadRedirect_(p) {
   try{
-    const data=verifySignedToken_(p.token,'DOWNLOAD_TOKEN_SECRET');if(data.kind!=='download')throw new Error('Invalid download token.');
+    const data=verifySignedToken_(p.token,'DOWNLOAD_TOKEN_SECRET');
+    if(data.kind!=='download')throw new Error('Invalid download token.');
     const c=findBy_(sheet_(VMH.SHEETS.CUSTOMERS),'customer_id',data.customer_id);if(!c)throw new Error('Account unavailable.');
-    requireEntitlement_(c,data.product_id);const a=findBy_(sheet_(VMH.SHEETS.ASSETS),'asset_id',data.asset_id);if(!a||!truthy_(a.active))throw new Error('Asset unavailable.');
-    const target='https://drive.google.com/uc?export=download&id='+encodeURIComponent(a.drive_file_id)+(a.drive_resource_key?'&resourcekey='+encodeURIComponent(a.drive_resource_key):'');
-    return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8"><title>Starting download</title><script>location.replace('+JSON.stringify(target)+');<\/script><p><a href="'+target.replace(/&/g,'&amp;')+'">Continue to download</a></p>');
+    requireEntitlement_(c,data.product_id);
+    const product=getPublicProduct_(data.product_id);if(!product||!isAccountEbook_(product))throw new Error('eBook unavailable.');
+    const repositoryPath=repositoryPathForProduct_(product);if(!repositoryPath)throw new Error('Repository eBook unavailable.');
+    const target=encodeURI(VMH.SITE_URL+repositoryPath);
+    return HtmlService.createHtmlOutput(
+      '<!doctype html><meta charset="utf-8"><title>Starting download</title>'+ 
+      '<script>location.replace('+JSON.stringify(target)+');<\/script>'+ 
+      '<p>Starting your Valois Media download…</p><p><a href="'+escapeHtml_(target)+'">Continue to download</a></p>'
+    );
   }catch(err){return HtmlService.createHtmlOutput('<h1>Download unavailable</h1><p>'+escapeHtml_(safeError_(err))+'</p>');}
 }
 
 function createSession_(c) {return createSignedToken_({kind:'session',customer_id:c.customer_id,email:c.email,version:String(c.session_version||1),exp:Date.now()+VMH.SESSION_DAYS*86400000},'ACCOUNT_TOKEN_SECRET');}
-function requireSession_(token) {const d=verifySignedToken_(token,'ACCOUNT_TOKEN_SECRET');if(d.kind!=='session')throw new Error('Invalid session.');const c=findBy_(sheet_(VMH.SHEETS.CUSTOMERS),'customer_id',d.customer_id);if(!c||String(c.session_version||1)!==String(d.version))throw new Error('Session expired.');return c;}
+function requireSession_(token) {const d=verifySignedToken_(token,'ACCOUNT_TOKEN_SECRET');if(d.kind!=='session')throw new Error('Invalid session.');const c=findBy_(sheet_(VMH.SHEETS.CUSTOMERS),'customer_id',d.customer_id);if(!c||String(c.session_version||1)!==String(d.version))throw new Error('Session expired.');if(String(c.status||'').toLowerCase()!=='active'||!truthy_(c.email_verified))throw new Error('Your account is not active or verified.');return c;}
 function createSignedToken_(payload,keyName){const secret=secret_(keyName);const body=b64_(JSON.stringify(payload));const sig=b64bytes_(Utilities.computeHmacSha256Signature(body,secret));return body+'.'+sig;}
 function verifySignedToken_(token,keyName){const parts=String(token||'').split('.');if(parts.length!==2)throw new Error('Invalid token.');const expected=b64bytes_(Utilities.computeHmacSha256Signature(parts[0],secret_(keyName)));if(!constantTimeEqual_(expected,parts[1]))throw new Error('Invalid token.');const d=JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());if(Number(d.exp||0)<Date.now())throw new Error('Token expired.');return d;}
 function secret_(name){const s=PropertiesService.getScriptProperties().getProperty(name);if(!s)throw new Error(name+' is not configured.');return s;}
