@@ -1,147 +1,37 @@
 (() => {
-  const shell = document.querySelector("#reader-shell");
-  if (!shell) return;
+  'use strict';
+  const shell=document.querySelector('#reader-shell');if(!shell)return;
+  const params=new URLSearchParams(location.search);const productKey=String(params.get('book')||'').trim();
+  let readerMeta=null,epubBook=null,rendition=null,tocItems=[],theme='light',fontPercent=100,savedCfi='',touchStartX=0,locationsReady=false,saveTimer=null;
+  const safe=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const storageKey=()=>`vmhLumiereState:${productKey}`;
+  const timeoutPromise=(promise,ms,message)=>{let timer;const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms)});return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));};
 
-  const book = new URLSearchParams(window.location.search).get("book");
+  function normalizeSource(value){const source=String(value||'').trim();if(!source)return'';try{const url=new URL(source,location.href);if(url.hostname===location.hostname)return url.pathname+url.search+url.hash;return url.href;}catch(_){return source;}}
+  async function fetchEpubBytes(source){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),30000);try{const response=await fetch(source,{method:'GET',credentials:'same-origin',cache:'no-store',redirect:'follow',signal:controller.signal});if(!response.ok)throw new Error(`The eBook file could not be loaded (HTTP ${response.status}).`);const type=String(response.headers.get('content-type')||'').toLowerCase();if(type.includes('text/html'))throw new Error('The eBook URL returned a web page instead of the EPUB file.');const bytes=await response.arrayBuffer();if(!bytes||bytes.byteLength<4)throw new Error('The eBook download was empty.');const signature=new Uint8Array(bytes,0,Math.min(4,bytes.byteLength));if(signature[0]!==0x50||signature[1]!==0x4b)throw new Error('The eBook URL did not return EPUB/ZIP data.');return bytes;}catch(error){if(error?.name==='AbortError')throw new Error('The eBook download timed out.');throw error;}finally{clearTimeout(timer);}}
 
-  function safe(value) {
-    return String(value ?? "").replace(
-      /[&<>"']/g,
-      character => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-      })[character]
-    );
-  }
+  function readLocalState(){try{return JSON.parse(localStorage.getItem(storageKey())||'null')||{};}catch(_){return{};}}
+  function hydrateState(meta){const local=readLocalState();let server={};try{server=JSON.parse(meta.reader_state_json||'{}')||{};}catch(_){}theme=['light','sepia','dark'].includes(local.theme)?local.theme:(['light','sepia','dark'].includes(server.theme)?server.theme:'light');fontPercent=Math.min(145,Math.max(80,Number(local.fontPercent||server.fontPercent||100)));savedCfi=String(meta.reading_location||local.cfi||server.cfi||'');}
+  function writeLocalState(){try{localStorage.setItem(storageKey(),JSON.stringify({theme,fontPercent,cfi:savedCfi,updatedAt:Date.now()}));}catch(_){}}
+  function progressFromCfi(cfi,locationData){try{if(locationsReady&&cfi){const p=epubBook.locations.percentageFromCfi(cfi);if(isFinite(p))return Math.max(0,Math.min(100,Math.round(p*100)));}}catch(_){}const index=Number(locationData?.start?.index);const length=Number(epubBook?.spine?.length||0);return length&&isFinite(index)?Math.max(0,Math.min(100,Math.round(((index+1)/length)*100))):Number(readerMeta?.reading_progress||0);}
+  function scheduleProgressSave(locationData){if(!readerMeta||!savedCfi||!VMH_AUTH.token)return;clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{try{await VMH_API.post('save-reading-progress',{token:VMH_AUTH.token,product:productKey,reading_progress:progressFromCfi(savedCfi,locationData),reading_location:savedCfi,reader_state_json:JSON.stringify({theme,fontPercent,cfi:savedCfi})});}catch(error){console.error('VMH Lumière progress save failed:',error);}},900);}
 
-  function emptyState(title, message, actionHtml = "") {
-    shell.innerHTML = `
-      <div class="reader-empty">
-        <img class="reader-empty-logo" src="/assets/Lumiere01.png" alt="VMH Lumière">
-        <div class="reader-empty-message">
-          <h1>${safe(title)}</h1>
-          <p>${safe(message)}</p>
-          ${actionHtml}
-        </div>
-      </div>`;
-  }
-
-  if (!book) {
-    emptyState(
-      "VMH Lumière is ready.",
-      "Open a title from Your Library to begin reading. Eligible eBooks purchased through Valois Media will appear in your library after you sign in.",
-      '<a class="button" href="/library/">Open Your Library</a>'
-    );
-    return;
-  }
-
-  if (!VMH_AUTH.token) {
-    emptyState(
-      "Sign in to VMH Lumière.",
-      "This title is connected to a customer library. Sign in to verify your access and continue reading.",
-      '<a class="button" href="/account/">Sign In</a>'
-    );
-    return;
-  }
-
-  let manifest;
-  let index = 0;
-
-  const content = () => shell.querySelector(".reader-content");
-
-  async function chapter(chapterIndex) {
-    const item = manifest.spine[chapterIndex];
-    if (!item) return;
-
-    const response = await VMH_API.get("reader-chapter", {
-      token: VMH_AUTH.token,
-      product: book,
-      chapter: item.id
-    });
-
-    if (!response.ok) {
-      throw new Error(response.error || "The chapter could not be loaded.");
-    }
-
-    content().innerHTML = response.data.html;
-    index = chapterIndex;
-
-    await VMH_API.post("save-reading-progress", {
-      token: VMH_AUTH.token,
-      product: book,
-      reading_progress: Math.round(((chapterIndex + 1) / manifest.spine.length) * 100),
-      reading_location: item.id
-    });
-  }
-
-  async function initializeReader() {
-    try {
-      emptyState(
-        "Preparing VMH Lumière…",
-        "Verifying your library and loading this title."
-      );
-
-      const response = await VMH_API.get("reader-manifest", {
-        token: VMH_AUTH.token,
-        product: book
-      });
-
-      if (!response.ok) {
-        throw new Error(response.error || "Reader access could not be verified.");
-      }
-
-      manifest = response.data;
-
-      shell.innerHTML = `
-        <div class="reader-toolbar">
-          <img src="/assets/Lumiere01.png" alt="VMH Lumière">
-          <button type="button" data-prev>Previous</button>
-          <button type="button" data-next>Next</button>
-          <button type="button" data-theme="light">Light</button>
-          <button type="button" data-theme="sepia">Sepia</button>
-          <button type="button" data-theme="dark">Dark</button>
-          <a class="button secondary" href="/library/">Library</a>
-        </div>
-        <article class="reader-content" aria-live="polite"></article>`;
-
-      shell.addEventListener("click", event => {
-        if (event.target.matches("[data-prev]")) {
-          chapter(Math.max(0, index - 1)).catch(showReaderError);
-        }
-
-        if (event.target.matches("[data-next]")) {
-          chapter(Math.min(manifest.spine.length - 1, index + 1)).catch(showReaderError);
-        }
-
-        if (event.target.dataset.theme) {
-          shell.classList.remove("reader-dark", "reader-sepia");
-          if (event.target.dataset.theme !== "light") {
-            shell.classList.add(`reader-${event.target.dataset.theme}`);
-          }
-        }
-      });
-
-      const savedIndex = manifest.spine.findIndex(
-        item => item.id === manifest.reading_location
-      );
-      const start = Math.max(0, savedIndex);
-
-      await chapter(start);
-    } catch (error) {
-      showReaderError(error);
-    }
-  }
-
-  function showReaderError(error) {
-    emptyState(
-      "VMH Lumière could not open this title.",
-      error?.message || "Reader access is temporarily unavailable.",
-      '<a class="button" href="/library/">Return to Your Library</a>'
-    );
-  }
-
-  initializeReader();
+  async function authorizeReader(){if(!VMH_AUTH.token)throw new Error('Please sign in to your Valois Media account.');const response=await VMH_API.post('reader-manifest',{token:VMH_AUTH.token,product:productKey});if(!response.ok)throw new Error(response.error||'Reader access could not be verified.');return response.data||{};}
+  function copyrightLine(){return `Copyright © <span data-vmh-year></span> | <a href="https://www.valoismedia.com" rel="noopener noreferrer">Valois Media Holdings</a> | All Rights Reserved`;}
+  function setYear(){shell.querySelectorAll('[data-vmh-year]').forEach(node=>node.textContent=String(new Date().getFullYear()));}
+  function brandBar(){return `<div class="vmh-lumiere-brandbar"><div class="vmh-lumiere-brandlogos"><a href="https://www.valoismedia.com" aria-label="Valois Media Holdings home"><img class="vmh-lumiere-vmh" src="/assets/VMHLogo01.png" alt="Valois Media Holdings"></a><a href="https://www.valoismedia.com/lumiere/" aria-label="VMH Lumière"><img class="vmh-lumiere-logo" src="/assets/Lumiere01.png" alt="VMH Lumière"></a></div><a class="vmh-lumiere-library-link" href="/library/">← Your Library</a></div>`;}
+  function destroyEpub(){clearTimeout(saveTimer);try{rendition?.destroy();}catch(_){}try{epubBook?.destroy();}catch(_){}rendition=null;epubBook=null;tocItems=[];}
+  function emptyState(title,message,actionHref='/library/',actionText='Return to Your Library'){destroyEpub();shell.className='vmh-lumiere-shell';shell.innerHTML=`${brandBar()}<div class="vmh-reader-empty"><div class="vmh-reader-empty-inner"><h1>${safe(title)}</h1><p>${safe(message)}</p><a class="button" href="${safe(actionHref)}">${safe(actionText)}</a></div></div><div class="vmh-lumiere-copyright">${copyrightLine()}</div>`;setYear();}
+  function applyShellTheme(){shell.classList.remove('theme-sepia','theme-dark');if(theme!=='light')shell.classList.add(`theme-${theme}`);shell.querySelectorAll('[data-theme]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.theme===theme)));}
+  function applyAppearance(){applyShellTheme();if(!rendition)return;try{rendition.themes.select(theme);rendition.themes.fontSize(`${fontPercent}%`);}catch(_){}scheduleProgressSave(null);writeLocalState();}
+  function registerThemes(){rendition.themes.register('light',{body:{background:'#fbf7ed !important',color:'#1d242b !important','font-family':"Georgia, 'Times New Roman', serif !important",'line-height':'1.7 !important'},a:{color:'#174f7a !important'},img:{'max-width':'100% !important',height:'auto !important'}});rendition.themes.register('sepia',{body:{background:'#efe4c9 !important',color:'#352d22 !important','font-family':"Georgia, 'Times New Roman', serif !important",'line-height':'1.7 !important'},a:{color:'#65491f !important'},img:{'max-width':'100% !important',height:'auto !important'}});rendition.themes.register('dark',{body:{background:'#151a20 !important',color:'#edf1f4 !important','font-family':"Georgia, 'Times New Roman', serif !important",'line-height':'1.7 !important'},a:{color:'#a9d5ff !important'},img:{'max-width':'100% !important',height:'auto !important'}});}
+  function flattenToc(items,depth=0,output=[]){(Array.isArray(items)?items:[]).forEach(item=>{output.push({href:String(item?.href||''),label:`${depth?'— '.repeat(Math.min(depth,3)):''}${String(item?.label||'Section').trim()}`});if(item?.subitems?.length)flattenToc(item.subitems,depth+1,output);});return output;}
+  function populateToc(items){tocItems=flattenToc(items);const select=shell.querySelector('[data-section]');if(!select)return;if(!tocItems.length){select.innerHTML='<option value="">Contents unavailable</option>';select.disabled=true;return;}select.disabled=false;select.innerHTML='<option value="">Contents</option>'+tocItems.map(item=>`<option value="${safe(item.href)}">${safe(item.label)}</option>`).join('');}
+  function syncToc(locationData){const href=String(locationData?.start?.href||'').split('#')[0];if(!href)return;const match=tocItems.find(item=>String(item.href||'').split('#')[0]===href);const select=shell.querySelector('[data-section]');if(match&&select)select.value=match.href;}
+  function epubShell(reader){shell.className='vmh-lumiere-shell';shell.innerHTML=`${brandBar()}<div class="vmh-reader-toolbar" role="toolbar" aria-label="Reader controls"><strong class="vmh-reader-title" data-reader-title>${safe(reader.title||'eBook')}</strong><button type="button" data-prev>Previous</button><button type="button" data-next>Next</button><select class="vmh-reader-select" data-section aria-label="Choose section"><option value="">Loading contents…</option></select><button type="button" data-font-down>A−</button><button type="button" data-font-up>A+</button><button type="button" data-theme="light">Light</button><button type="button" data-theme="sepia">Sepia</button><button type="button" data-theme="dark">Dark</button></div><div class="vmh-reader-stage"><div id="epub-viewer" class="vmh-epub-viewer" aria-label="${safe(reader.title||'eBook reader')}"><div class="vmh-reader-loading">Opening eBook…</div></div></div><div class="vmh-lumiere-copyright">${copyrightLine()}</div>`;setYear();applyShellTheme();shell.querySelector('[data-prev]')?.addEventListener('click',()=>rendition?.prev());shell.querySelector('[data-next]')?.addEventListener('click',()=>rendition?.next());shell.querySelector('[data-font-down]')?.addEventListener('click',()=>{fontPercent=Math.max(80,fontPercent-8);applyAppearance();});shell.querySelector('[data-font-up]')?.addEventListener('click',()=>{fontPercent=Math.min(145,fontPercent+8);applyAppearance();});shell.querySelectorAll('[data-theme]').forEach(btn=>btn.addEventListener('click',()=>{theme=btn.dataset.theme||'light';applyAppearance();}));shell.querySelector('[data-section]')?.addEventListener('change',event=>{const href=String(event.target.value||'');if(href&&rendition)rendition.display(href).catch(console.error);});const viewer=shell.querySelector('#epub-viewer');viewer?.addEventListener('touchstart',event=>{touchStartX=Number(event.touches?.[0]?.clientX||0);},{passive:true});viewer?.addEventListener('touchend',event=>{const endX=Number(event.changedTouches?.[0]?.clientX||0),delta=endX-touchStartX;if(Math.abs(delta)<55||!rendition)return;delta<0?rendition.next():rendition.prev();},{passive:true});}
+  function readerErrorMessage(error){if(error instanceof Error&&error.message)return error.message;if(typeof error==='string'&&error.trim())return error.trim();if(error&&typeof error.message==='string'&&error.message.trim())return error.message.trim();return'Reader access is temporarily unavailable.';}
+  async function openEpub(reader){if(typeof window.ePub!=='function'||typeof window.JSZip!=='function')throw new Error('VMH Lumière reader libraries did not load. Refresh the page and try again.');const source=normalizeSource(reader.source_url);if(!source)throw new Error('The repository EPUB source is unavailable.');if(!/\.epub(?:$|[?#])/i.test(source))throw new Error('The authorized repository file is not an EPUB.');epubShell(reader);const viewer=shell.querySelector('#epub-viewer');if(viewer)viewer.innerHTML='<div class="vmh-reader-loading">Downloading eBook…</div>';const epubBytes=await fetchEpubBytes(source);if(viewer)viewer.innerHTML='<div class="vmh-reader-loading">Opening eBook…</div>';const epubBinary=new Uint8Array(epubBytes);epubBook=window.ePub({replacements:'blobUrl',encoding:'binary'});await timeoutPromise(epubBook.open(epubBinary,'binary'),30000,'VMH Lumière timed out while opening this EPUB.');if(!viewer)throw new Error('The VMH Lumière reading area is unavailable.');viewer.replaceChildren();rendition=epubBook.renderTo(viewer,{width:'100%',height:'100%',spread:'none',flow:'paginated'});registerThemes();applyAppearance();rendition.on('relocated',locationData=>{savedCfi=String(locationData?.start?.cfi||savedCfi||'');syncToc(locationData);writeLocalState();scheduleProgressSave(locationData);});rendition.on('keyup',event=>{if(event?.key==='ArrowLeft')rendition.prev();if(event?.key==='ArrowRight')rendition.next();});document.addEventListener('keydown',event=>{if(!rendition)return;if(event.key==='ArrowLeft')rendition.prev();if(event.key==='ArrowRight')rendition.next();});try{await timeoutPromise(rendition.display(savedCfi||undefined),20000,'VMH Lumière timed out while displaying this EPUB.');}catch(error){if(!savedCfi)throw error;savedCfi='';writeLocalState();await timeoutPromise(rendition.display(),20000,'VMH Lumière timed out while displaying the first page of this EPUB.');}Promise.resolve(epubBook.loaded.navigation).then(nav=>populateToc(nav?.toc||[])).catch(()=>populateToc([]));Promise.resolve(epubBook.loaded.metadata).then(meta=>{const node=shell.querySelector('[data-reader-title]');if(node&&meta?.title)node.textContent=meta.title;}).catch(console.error);Promise.resolve(epubBook.locations.generate(1400)).then(()=>{locationsReady=true;}).catch(()=>{});}
+  async function initialize(){if(!productKey){emptyState('VMH Lumière is ready.','Open an entitled title from Your Library to begin reading.');return;}if(!VMH_AUTH.token){emptyState('Sign in to read this title.','VMH Lumière verifies your Valois Media entitlement before opening an eBook.','/account/','Sign In');return;}try{emptyState('Preparing VMH Lumière…','Verifying your Valois Media library access and opening the repository eBook.');readerMeta=await authorizeReader();hydrateState(readerMeta);if(readerMeta.format!=='epub')throw new Error('This title is not available as an EPUB.');await openEpub(readerMeta);}catch(error){console.error('VMH Lumière initialization error:',error);emptyState('VMH Lumière could not open this title.',readerErrorMessage(error));}}
+  window.addEventListener('pagehide',()=>{if(savedCfi)scheduleProgressSave(null);destroyEpub();},{once:true});
+  initialize();
 })();
