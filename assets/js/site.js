@@ -65,6 +65,7 @@
           <div>
             <h3>Legal</h3>
             <div class="footer-links">
+              <a href="/editorial-standards/">Editorial Standards</a>
               <a href="/terms/">Terms of Service</a>
               <a href="/privacy/">Privacy Policy</a>
               <a href="/copyright/">Copyright</a>
